@@ -1,6 +1,11 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using MailKit;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Org.BouncyCastle.Security;
+using System.Runtime.Intrinsics.X86;
 using System.Security.Cryptography;
+using VerifyEmailForgotPassword.Models;
+using VerifyEmailForgotPassword.Services.EmailService;
 
 namespace VerifyEmailForgotPassword.Controllers
 {
@@ -9,13 +14,21 @@ namespace VerifyEmailForgotPassword.Controllers
     public class UserController : ControllerBase
     {
         private readonly DataContext _context;
-        public UserController(DataContext context)
+        private readonly IEmailService _emailService;
+
+        //public UserController(DataContext context)
+        //{
+        //    _context = context;
+        //}
+        public UserController(DataContext context, IEmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
+
         [HttpPost("register")]
-        public async Task<IActionResult> Register(UserRegisterRequest request)
+        public async Task<IActionResult> Register(UserRegisterDto request)
         {
             if (_context.Users.Any(u => u.Email == request.Email))
             {
@@ -36,25 +49,34 @@ namespace VerifyEmailForgotPassword.Controllers
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            //Sending mail to user for registration info
+            EmailDto emailDto = new EmailDto()
+            {
+                To = user.Email,
+                Subject = "Registration",
+                Body = "Please click on the verification link sent to your e-mail to activate your account." + "     " + user.VerificationToken
+            };
+            _emailService.SendEmail(emailDto);
+
             return Ok("User successfully created!");
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login(UserLoginRequest request)
+        public async Task<IActionResult> Login(UserLoginDto request)
         {
             var user = _context.Users.FirstOrDefault(u => u.Email == request.Email);
             if (user == null)
             {
                 return BadRequest("User not found.");
             }
-            if(!VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
+            if (!VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
             {
                 return BadRequest("Password is incorrect.");
             }
             if (user.VerifiedAt == null)
             {
                 return BadRequest("User not verified!");
-            }   
+            }
 
             return Ok($"Welcome back, {user.Email}! :)");
         }
@@ -69,6 +91,15 @@ namespace VerifyEmailForgotPassword.Controllers
             }
             user.VerifiedAt = DateTime.Now;
             await _context.SaveChangesAsync();
+
+            //Sending mail to user for verify info
+            EmailDto emailDto = new EmailDto()
+            {
+                To = user.Email,
+                Subject = "Account Verify",
+                Body = "User verified! :)"
+            };
+            _emailService.SendEmail(emailDto);
 
             return Ok("User verified! :)");
         }
@@ -86,11 +117,20 @@ namespace VerifyEmailForgotPassword.Controllers
             user.ResetTokenExpires = DateTime.Now.AddDays(1);
             await _context.SaveChangesAsync();
 
+            //Sending mail to user for the password change.
+            EmailDto emailDto = new EmailDto()
+            {
+                To = user.Email,
+                Subject = "Forgot Password",
+                Body = "You can use the token in the mail to change your password. The validity period of the token is 1 day." + "     " + user.PasswordResetToken
+            };
+            _emailService.SendEmail(emailDto);
+
             return Ok("You may now reset your password.");
         }
 
         [HttpPost("reset-password")]
-        public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
+        public async Task<IActionResult> ResetPassword(ResetPasswordDto request)
         {
             var user = _context.Users.FirstOrDefault(u => u.PasswordResetToken == request.Token);
             if (user == null || user.ResetTokenExpires < DateTime.Now)
@@ -107,6 +147,13 @@ namespace VerifyEmailForgotPassword.Controllers
             await _context.SaveChangesAsync();
 
             return Ok("Password successfully reset.");
+        }
+
+        [HttpPost("send-mail")]
+        public async Task<IActionResult> SendMail(EmailDto request)
+        {
+            _emailService.SendEmail(request);
+            return Ok();
         }
 
         private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
@@ -129,7 +176,8 @@ namespace VerifyEmailForgotPassword.Controllers
 
         private string CreateRandomToken()
         {
-            return Convert.ToHexString(RandomNumberGenerator.GetBytes(64));          
+            string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(64));
+            return token;
         }
 
     }

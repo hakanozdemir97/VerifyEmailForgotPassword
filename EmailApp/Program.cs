@@ -1,7 +1,6 @@
-global using Microsoft.EntityFrameworkCore;
-global using VerifyEmailForgotPassword.Models;
-global using VerifyEmailForgotPassword.Services.EmailService;
-global using VerifyEmailForgotPassword.Data;
+global using EmailApp.Models;
+global using EmailApp.Services.EmailService;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,8 +10,6 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddDbContext<DataContext>();
-builder.Services.AddScoped<IEmailService,EmailService>();
 
 var app = builder.Build();
 
