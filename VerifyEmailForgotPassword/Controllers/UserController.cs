@@ -75,7 +75,7 @@ namespace VerifyEmailForgotPassword.Controllers
             }
             if (user.VerifiedAt == null)
             {
-                return BadRequest("User not verified!");
+                return BadRequest("User not verified! Please check your e-mail.");
             }
 
             return Ok($"Welcome back, {user.Email}! :)");
